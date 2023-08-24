@@ -2,6 +2,7 @@ mainmenu "Zeal 8-bit OS Configuration"
 
     config CPU_FREQ
         int "CPU Clock Frequency (Hz)"
+        default 7372800 if TARGET_RC2014
         default 10000000
         help
             Defines the CPU frequency in Hz, this may be used for counting time when no hardware timer
@@ -12,6 +13,7 @@ mainmenu "Zeal 8-bit OS Configuration"
         default "zeal8bit" if TARGET_ZEAL_8_BIT
         default "trs80" if TARGET_TRS_80
         default "agon" if TARGET_AGON_LIGHT
+        default "rc2014" if TARGET_RC2014
 
     choice COMPILATION_TARGET
         prompt "Target board"
@@ -35,6 +37,13 @@ mainmenu "Zeal 8-bit OS Configuration"
             prompt "Agon Light"
             help
                 Compile for Agon Light.
+
+        config TARGET_RC2014
+            bool
+            prompt "RC2014 Pro with SIO/2"
+            help
+                Compile for RC2014Pro or equivalent with SIO/2 extension board.
+
     endchoice
 
     # Configuration options depending on the target
@@ -48,6 +57,10 @@ mainmenu "Zeal 8-bit OS Configuration"
 
     if TARGET_AGON_LIGHT
         source "target/agon/Kconfig"
+    endif
+
+    if TARGET_RC2014
+        source "target/rc2014/Kconfig"
     endif
 
     source "kernel/Kconfig"

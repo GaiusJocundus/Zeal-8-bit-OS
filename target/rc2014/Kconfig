@@ -1,0 +1,10 @@
+menu "Zeal 8-bit Computer configuration"
+    config TARGET_HAS_MMU
+        bool
+        default n
+
+    config KERNEL_TARGET_HAS_MMU
+        bool "Enable MMU support in the kernel"
+        default n
+
+endmenu
