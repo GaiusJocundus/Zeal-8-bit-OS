@@ -1,7 +1,7 @@
 INCLUDES := ./ ./include
 
 # Add the source files to assemble for current target, we only have a video driver for now
-#SRCS := video.asm
+SRCS := sio.asm
 
 # Command to be executed before compiling the whole OS, let's print a small message
 PRECMD := @echo "Compiling for RC2014!"
