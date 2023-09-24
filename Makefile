@@ -142,7 +142,7 @@ define CONVERT_config_asm =
 endef
 
 menuconfig:
-	$(PYTHON) $(shell $(PYTHON) -m site --user-base)/bin/menuconfig
+	$(PYTHON) /usr/bin/menuconfig
 	@echo "Converting $(KCONFIG_CONFIG) to $(OSCONFIG_ASM) ..."
 	@$(call CONVERT_config_asm,$(KCONFIG_CONFIG), $(OSCONFIG_ASM))
 
