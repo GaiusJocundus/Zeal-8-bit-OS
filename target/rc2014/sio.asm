@@ -5,27 +5,28 @@
     INCLUDE "errors_h.asm"
     INCLUDE "drivers_h.asm"
     INCLUDE "utils_h.asm"
+    INCLUDE "stdout_h.asm"
 
     DEFC SIO_PORTA_CTRL = 0x80
     DEFC SIO_PORTA_DATA = 0x81
     DEFC SIO_PORTB_CTRL = 0x82
     DEFC SIO_PORTB_DATA = 0x83
 
-    DEFC RBUF = 0xEFF0
-    DEFC RBUFHD = 0xEFEE
-    DEFC RBUFTL = 0xEFEF
-    DEFC RBUFSIZ = 0x0F
-
     SECTION KERNEL_DRV_TEXT
-sio_init:
 
+    PUBLIC stdout_op_start
+stdout_op_start:
+    ret
+stdout_op_end:
+    ret
+
+sio_init:
     ; Initialize the ring buffer now
-    ld a, 0
+    xor a
     ld hl, RBUFHD
     ld (hl), a
     ld hl, RBUFTL
     ld (hl), a
-    ret
 
     ; Configure register 1 to have a single interrupt vector for all status, enable Rx Interrupts
     ld a, 1  ; reg to configure
@@ -79,7 +80,7 @@ _read_okay:
     ld (hl), a
     ld a, l
     inc a
-    and RBUFSIZ
+    and RING_BUF_SIZE
     ld (RBUFHD), a
 
 _read_exit:
@@ -87,18 +88,14 @@ _read_exit:
     ei
     reti
 
-stdout_print_char:
+    PUBLIC stdout_print_buffer
+stdout_print_buffer:
 sio_write:
     push af
     call _write_byte
     jr nc, _write_exit
     ld a, 0x28
     out (SIO_PORTA_CTRL), a
-
-_write_exit:
-    pop af
-    ei
-    reti
 
 _write_byte:
     di
@@ -109,8 +106,7 @@ _write_byte:
     jr nz, _write_okay
 
     scf
-    ei
-    ret
+    jr _write_exit
 
 _write_okay:
     ld hl, RBUF
@@ -119,11 +115,14 @@ _write_okay:
     out (SIO_PORTA_DATA), a
     ld a, l
     inc a
-    and RBUFSIZ
+    and RING_BUF_SIZE
     ld (RBUFTL), a
     or a
+
+_write_exit:
+    pop af
     ei
-    ret
+    reti
 
 sio_open:
 sio_close:
@@ -132,6 +131,14 @@ sio_ioctl:
 sio_deinit:
     xor a ; Success
     ret
+
+    ; Size of the ringbuffer
+    DEFC RING_BUF_SIZE = 0xF
+
+    SECTION DRIVER_BSS
+RBUFHD: DEFS 1 ; allocate 1 byte
+RBUFTL: DEFS 1 ; allocate 1 byte
+RBUF: DEFS RING_BUF_SIZE ; Allocate RING_BUF_SIZE bytes for the buffer itself
 
     SECTION KERNEL_DRV_VECTOR
 this_struct:
