@@ -1,6 +1,15 @@
 menu "Zeal 8-bit Computer configuration"
 
+    # Assign a number to each target
+    config TARGET_NUMBER
+        int
+        default 1
+
     config TARGET_HAS_MMU
+        bool
+        default y
+
+    config TARGET_HAS_DRIVERS_HOOK
         bool
         default y
 
@@ -36,6 +45,46 @@ menu "Zeal 8-bit Computer configuration"
             Let the kernel be aware that an MMU is present or not. This value must be enabled to have full support for Zeal 8-bit
             Computer target.
             Disable this option to test no-MMU kernel. Video driver will be disabled, standard output will be done through UART.
+
+    config TARGET_ENABLE_COMPACTFLASH
+        bool
+        prompt "Enable CompactFlash driver (EXPERIMENTAL)"
+        default y
+        help
+            Import the CompactFlash driver in the kernel compilation. If this option is enabled, the CompactFlash will be seen
+            as a disk by the kernel. The address and and the initialization timeout can be configured.
+            NOTE: At the moment, only reads are supported and the CompactFlash must be using `rawtable` filesystem.
+
+    menu "CompactFlash driver configuration"
+        depends on TARGET_ENABLE_COMPACTFLASH
+
+        config TARGET_COMPACTFLASH_ADDRESS
+            hex "CompactFlash I/O address"
+            default 0x70
+            range 0x00 0xF8
+            help
+                Address where the CompactFlash is mapped on the I/O bus. This should be the address of the first
+                register (Data register).
+
+        config TARGET_COMPACTFLASH_TIMEOUT
+            int "CompactFlash initialization timeout (ms)"
+            default 30
+            range 0 65535
+            help
+                On startup, the CompactFlash takes some time to initialize itself, this will slow down the kernel startup time.
+                This configuration value decides how long the driver should wait for the card to be ready before giving up and
+                ignoring it until the next reset.
+
+    endmenu
+
+
+    config ENABLE_EMULATION_HOSTFS
+        bool
+        prompt "Enable host file system for the emulator (EXPERIMENTAL)"
+        default "n"
+        help
+            Implements a virtual file system that will use the host machine FS when the OS is run under the Zeal 8-bit Computer emulator
+
 
     config TARGET_ENABLE_VIDEO
         bool

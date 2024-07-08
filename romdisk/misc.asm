@@ -6,6 +6,7 @@
     INCLUDE "zos_video.asm"
 
     EXTERN error_print
+    EXTERN strlen
 
     SECTION TEXT
 
@@ -16,8 +17,9 @@
     ; Returns:
     ;       A - 0 on success
     PUBLIC exec_main
+    PUBLIC exec_main_ret_success
 exec_main:
-    ; Make sure there are exactly two parameters (ignore argc/v for the moment)
+    ; There must be at least two parameters
     ld a, c
     cp 2
     ret c
@@ -32,15 +34,86 @@ exec_main:
     ld de, 0
     dec a
     dec a
-    jr z, _exec_main_no_param
+    jr z, exec_main_bc_de
     ; We do have an extra parameter!
     ld e, (hl)
     inc hl
     ld d, (hl)
-_exec_main_no_param:
-    EXEC()
-    ld de, 0
+    dec a
+    jr z, exec_main_bc_de
+    ; If we still have parameters, we have to "merge" them, as required by
+    ; the EXEC syscall. DE is the start of the real parameter, browse it
+    ; and replace all the '\0' by ' ', we should have A (reg) null-bytes
+    ld h, d
+    ld l, e
+    push bc
+    ld b, a
+    xor a
+_exec_main_merge:
+    inc hl
+    cp (hl)
+    jr nz, _exec_main_merge
+    ; Found a NULL-byte!
+    ld (hl), ' '
+    djnz _exec_main_merge
+    pop bc
+
+    ; Execute the program stored in BC with the parameters in DE
+    PUBLIC exec_main_bc_de
+exec_main_bc_de:
+    ; Keep the file name so that we can show it in case of error
+    push bc
+    call try_exec_bc_de
+    pop hl
+    ; If an error occurred while executing, A will not be 0
+    or a
+    jr nz, exec_main_error
+exec_main_ret_success:
+    ; Exec was a success, the returned value from sub-process is in D
+    ld a, d
+    ld (exec_sub_program_ret), a
+    ret
+exec_main_error:
+    ; Do not alter the error to print
+    ld d, a
+    ; Get the length of the command (in HL)
+    call strlen
+    ld a, d
+    ; Prepare the error_print parameter
+    ld d, h
+    ld e, l
+    ; Append ": " at the end of the file name
+    add hl, bc
+    ld (hl), ':'
+    inc hl
+    ld (hl), ' '
+    inc bc
+    inc bc
     jp error_print
+
+
+    ; Execute the program pointed by BC, this routien will automatically
+    ; determine whether to override or preserve the current program, depending
+    ; on the kernel configuration structure.
+    ; Parameters:
+    ;   BC - Program path/name
+    ;   DE - Parameter (optional)
+    PUBLIC try_exec_bc_de
+try_exec_bc_de:
+    ; Check if the kernel has MMU support, if that's the case, this init program can be
+    ; preserved in memory while the subprogram executes.
+    KERNEL_CONFIG(hl)
+    inc hl  ; point to MMU capability
+    ld a, (hl)
+    ; Prepare parameter before testing the MMU capability
+    ld h, EXEC_PRESERVE_PROGRAM
+    or a    ; A = 0 <=> no MMU capability, cannot preserve
+    jr nz, _process_command_exec
+    ld h, EXEC_OVERRIDE_PROGRAM
+_process_command_exec:
+    EXEC()
+    ret
+
 
     ; Reset the board
     PUBLIC reset_main
@@ -58,3 +131,6 @@ clear_main:
     ret
 
 
+    SECTION DATA
+    PUBLIC exec_sub_program_ret
+exec_sub_program_ret: DEFS 1

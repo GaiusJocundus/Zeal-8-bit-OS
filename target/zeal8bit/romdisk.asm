@@ -9,10 +9,30 @@
         INCLUDE "vfs_h.asm"
         INCLUDE "disks_h.asm"
         INCLUDE "interrupt_h.asm"
+    IF CONFIG_ENABLE_EMULATION_HOSTFS
+        INCLUDE "fs/hostfs_h.asm"
+    ENDIF
 
 
         SECTION KERNEL_DRV_TEXT
 romdisk_init:
+    IF CONFIG_ENABLE_EMULATION_HOSTFS
+        ; Check if the host's file system layer is present.
+        ld a, OP_WHOAMI
+        out (IO_OPERATION), a
+        in a, (IO_OPERATION)
+        ; Arbitrary value returned by the host FS layer
+        cp 0xd3
+        jr nz, _no_hostfs
+
+        ; Register a HostFS, no need to create a new file for that
+        ld hl, _romdisk_driver    ; The callee won't check it, no need for a driver
+        ld e, FS_HOSTFS
+        ld a, 'H'   ; Disk H for host
+        call zos_disks_mount
+_no_hostfs:
+    ENDIF
+
         ; Mount this romdisk as the default disk
         call zos_disks_get_default
         ; Default disk in A
@@ -24,10 +44,8 @@ romdisk_init:
         ; A has the status, return it if error
         or a
         ret nz
-        ; This is the last driver, enable interrupts here
-        INTERRUPTS_ENABLE()
         ; Else, return ERR_DRIVER_HIDDEN as we don't want this driver to be
-        ; directly used by users.
+        ; directly used (as a block device) by users.
         ld a, ERR_DRIVER_HIDDEN
         ret
 

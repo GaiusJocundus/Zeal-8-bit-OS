@@ -42,20 +42,45 @@ menu "Kernel configuration"
                         virtual page: 16KB.
 
         config KERNEL_COLDBOOT_HOOK
-                bool "Hook routine at coldboot"
-                default n
+                bool
+                # If the target has already a hook installed, do not show this option
+                prompt "Hook routine at coldboot" if !TARGET_HAS_COLDBOOT_HOOK
+                default TARGET_HAS_COLDBOOT_HOOK
                 help
                         When enabled, the kernel will call the routine named `target_coldboot` right
                         after initializing the MMU (if any) and setting up the stack.
                         This routine must be defined in the target code.
 
         config KERNEL_EXIT_HOOK
-            bool "Hook routine at program exit"
-            default n
-            help
+                bool
+                prompt "Hook routine at program exit" if !TARGET_HAS_EXIT_HOOK
+                default TARGET_HAS_EXIT_HOOK
+                help
                         When enabled, the kernel will call the routine named `target_exit` right
                         after exiting a user program.
                         This routine must be defined in the target code.
+
+        config KERNEL_DRIVERS_HOOK
+                bool
+                prompt "Hook routine called after drivers initialization" if !TARGET_HAS_DRIVERS_HOOK
+                default TARGET_HAS_DRIVERS_HOOK
+                help
+                        When enabled, the kernel will call the routine named `target_drivers_hook` right
+                        after the drivers initialization.
+                        This routine must be defined in the target code.
+
+        config KERNEL_MAX_NESTED_PROGRAMS
+                int "Maximum number of nested programs"
+                depends on KERNEL_TARGET_HAS_MMU
+                default 3
+                range 1 10
+                help
+                        When a program A performs an exec syscall to load program B in memory, it is possible
+                        to save A so that it is resumed once B finishes executing.
+                        This value represents the maximum depth of exec that can be performed recursively by
+                        programs.
+                        For example, if this value is set to 1, no program can be saved in RAM when performing an exec.
+                        If this value is set to 2, A can exec B, but B cannot exec without being overwritten/covered.
 
         config KERNEL_MAX_LOADED_DRIVERS
                 int "Maximum number of loaded drivers"
@@ -105,13 +130,11 @@ menu "Kernel configuration"
                         it will load the KERNEL_INIT_EXECUTABLE in RAM. This constant defines the virtual
                         address where it will be loaded and executed from.
 
-        config KERNEL_LOG_SUPPORT_ANSI_COLOR
-                bool "Mark whether Kernel logger can use ANSI escape sequences for printing colors"
+        config KERNEL_LOG_BOOT_MOUNTED_DISKS
+                bool "Print the mounted disks in the boot banner"
                 default y
                 help
-                        Kernel logger, by default, prints logs without any color. However, if this option
-                        is enable, it will be able to print error messages in red, warning messages in yellow
-                        and info messages in green.
+                        If this option is enabled, the kernel will print the disks that are mounted on boot.
 
         config KERNEL_ENABLE_ZEALFS_SUPPORT
                 bool "Enable support for ZealFS file system"

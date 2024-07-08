@@ -69,7 +69,7 @@
     ;     uint8_t  d_minutes;
     ;     uint8_t  d_seconds;
     ; }
-    ; All the fields above are in BSD format.
+    ; All the fields above are in BCD format.
     DEFC ZOS_DATE_SIZE = 17
 
     ; @brief Stat file size, in bytes.
@@ -88,6 +88,28 @@
 
     ; @brief Filesystems supported on Zeal 8-bit OS
     DEFC FS_RAWTABLE = 0
+
+    ; @brief Kernel configuration structure size, in bytes.
+    ; Its content would be represented like this in C:
+    ; struct {
+    ;     uint8_t c_target;     // Machine number the OS is running on, 0 means UNKNOWN
+    ;     uint8_t c_mmu;        // 0 if the MMU-less kernel is running, 1 else
+    ;     char    c_def_disk;   // Upper case letter for the default disk
+    ;     uint8_t c_max_driver; // Maximum number of driver loadable in the kernel
+    ;     uint8_t c_max_dev;    // Maximum number of opened devices in the kernel
+    ;     uint8_t c_max_files;  // Maximum number of opened files in the kernel
+    ;     uint16_t c_max_path;  // Maximum path length
+    ;     void*    c_prog_addr; // Virtual address where user programs are loaded
+    ;     void*    c_custom;    // Custom area, target-specific
+    ; } zos_config_t;
+    DEFC ZOS_CONFIG_SIZE = 12
+
+    ; @brief Override caller program when invoking `exec`
+    DEFC EXEC_OVERRIDE_PROGRAM = 0
+
+    ; @brief Keep the caller program in memory when invoking `exec`, until "child"
+    ; program finishes its execution
+    DEFC EXEC_PRESERVE_PROGRAM = 1
 
 
     ; @brief Macro to abstract the syscall instruction
@@ -417,11 +439,13 @@
     ENDM
 
 
-    ; @brief Exit the program and give back the hand to the kernel.
+    ; @brief Exit the program and give back the hand to the kernel. If the caller program invoked
+    ;        EXEC() with `EXEC_PRESERVE_PROGRAM` as the mode, it will be reloaded from RAM after
+    ;        exiting the current program.
     ;        Can be invoked with EXIT().
     ;
     ; Parameters:
-    ;   C - Returned code (unused yet)
+    ;   H - Return code to pass to caller program
     ; Returns:
     ;   None
     MACRO  EXIT  _
@@ -431,14 +455,31 @@
 
 
     ; @brief Load and execute a program from a file name given as a parameter.
-    ;        The program will cover the current program.
+    ;        The current program, invoking this syscall, can either be preserved in memory
+    ;        (only available when the kernel is compiled with MMU support!)
+    ;        until the sub-program finishes executing, or, it can be covered/overridden.
+    ;        In the first case, upon return, D register will contain the return value of the
+    ;        sub-program.
+    ;        The depth of sub-programs is defined and limited in the kernel. As such, it is not
+    ;        guaranteed that it will always be possible to execute a sub-program while keeping
+    ;        the current one in memory. It depends on the target and kernel configuration.
     ;        Can be invoked with EXEC().
     ;
     ; Parameters:
     ;   BC - File to load and execute. The string must be NULL-terminated and must not cross boundaries.
     ;   DE - String argument to give to the program to execute, must be NULL-terminated. Can be NULL.
+    ;   H - Mode marking whether the current program shall be preserved in RAM or overwritten by sub-program.
+    ;       Can be either `EXEC_OVERRIDE_PROGRAM` or `EXEC_PRESERVE_PROGRAM`.
     ; Returns:
-    ;   A - On success, the new program is executed. ERR_FAILURE on failure.
+    ;   A - When invoked with `EXEC_OVERRIDE_PROGRAM`, returns only on error
+    ;       When invoked with `EXEC_PRESERVE_PROGRAM`, returns ERR_SUCCESS when the sub-program was executed
+    ;       successfully (regardless of its returned value), error code else. If error code is ERR_CANNOT_REGISTER_MORE,
+    ;       the maximum depth has been reached, the current program cannot execute a program while being preserved in
+    ;       memory. In that case, it shall either exit, either execute the sub-program with `EXEC_OVERRIDE_PROGRAM`.
+    ;   D - Sub-program exit value, when invoked with `EXEC_PRESERVE_PROGRAM`.
+    ; Alters:
+    ;   Contrarily to other syscalls, invoking EXEC() will not preserve AF, BC, DE, IX, IY.
+    ;   Only HL is guaranteed to be preserved.
     MACRO  EXEC  _
         ld l, 16
         SYSCALL
@@ -554,6 +595,34 @@
     MACRO  MAP  _
         ld l, 23
         SYSCALL
+    ENDM
+
+
+    ; @brief Swap the given opened devs. This can be handy to temporarily override the
+    ;        standard input or output and restore it afterwards.
+    ;        Can be invoked with SWAP().
+    ;
+    ; Parameters:
+    ;   H - First dev number.
+    ;   E - Second dev number.
+    ; Returns:
+    ;   A - ERR_SUCCESS on success, error code else
+    MACRO  SWAP  _
+        ld l, 24
+        SYSCALL
+    ENDM
+
+
+    ; @brief Get a read-only pointer to the kernel configuration.
+    ;
+    ; Parameters:
+    ;   PAIR - 16-bit register (HL, DE, BC) to store the configuration structure address in
+    ; Returns:
+    ;   PAIR - Address of the configuration structure. It is guaranteed that the structure won't
+    ;          be spread across two 256-byte pages. In other words, it is possible to browse the
+    ;          structure by performing 8-bit arithmetic (`inc l` for example).
+    MACRO KERNEL_CONFIG PAIR
+        ld PAIR, (0x0004)
     ENDM
 
     ENDIF ; ZOS_SYS_HEADER
