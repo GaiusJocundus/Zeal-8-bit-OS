@@ -1,4 +1,7 @@
 menu "Zeal 8-bit Computer configuration"
+    config TARGET_NUMBER
+        int
+        default 4
     config TARGET_HAS_MMU
         bool
         default n
