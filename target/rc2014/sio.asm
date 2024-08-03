@@ -23,6 +23,9 @@ sio_init:
     ld hl, RBUFTL
     ld (hl), a
 
+    ld a, interrupt_vector_table >> 8
+    ld i, a
+
     EXTERN zos_vfs_set_stdout
 
     ; Configure register 1 to have a single interrupt vector for all status, enable Rx Interrupts
@@ -34,7 +37,7 @@ sio_init:
     ; Configure reset vector (register 2) to 0
     ld a, 2
     out (SIO_PORTA_CTRL), a
-    xor a
+    ld a, interrupt_vector_table & 0xff
     out (SIO_PORTA_CTRL), a
     
     ; Configure register 3 to accept 8-bits/char, enable Rx
@@ -59,6 +62,7 @@ sio_init:
     call zos_vfs_set_stdout
 
     INTERRUPTS_ENABLE()
+    ret
 
     PUBLIC interrupt_default_handler
     PUBLIC interrupt_sio_handler
